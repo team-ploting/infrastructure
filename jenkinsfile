@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_IMAGE = 'ploting-server:latest'
+        CONTAINER_NAME = 'ploting-server'
+    }
+    
+    parameters {
+        text(name: 'ENV_FILE', defaultValue: '', description: 'prod .env 파일의 내용')
+    }
+
+    stages {
+        stage('Pull Code') {
+            steps {
+                git url: 'https://github.com/team-ploting/ploting-server.git', branch: 'main'
+            }
+        }
+        
+        stage('Create .env File') {
+            steps {
+                script {
+                    writeFile file: 'src/main/resources/.env', text: params.ENV_FILE
+                    sh 'cat src/main/resources/.env'
+                }
+            }
+        }
+        
+        stage('Gradle Build') {
+            steps {
+                script {
+                    sh './gradlew clean build -x test'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE} ."
+                }
+            }
+        }
+
+        stage('Stop Running Container') {
+            steps {
+                script {
+                    sh "docker stop ${CONTAINER_NAME} || true"
+                    sh "docker rm ${CONTAINER_NAME} || true"
+                }
+            }
+        }
+
+        stage('Run New Container') {
+            steps {
+                script {
+                    sh "docker run -d --name ${CONTAINER_NAME} -p 8082:8080 ${DOCKER_IMAGE}"
+                }
+            }
+        }
+    }
+}
+
